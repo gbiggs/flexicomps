@@ -1,0 +1,32 @@
+/**
+ * @file    BasicOperations.idl
+ * @brief   Definition of basic operations for RT-Components. 
+ * @author  Masayuki Shimizu <masayuki.shimizu@aist.go.jp>
+ * @date    2008/02/19
+ * @note    Copyright (C) 2008 Masayuki Shimizu All Rights Reserved.
+ */
+
+#ifndef RTC_BASIC_OPERATIONS_IDL
+#define RTC_BASIC_OPERATIONS_IDL
+
+module UI{
+  
+  interface BasicOperations{
+    
+    /**
+     * @brief  Start operation.
+     * @return FALSE if not available or an error occurred.
+     */
+    boolean start();
+
+    /**
+     * @brief  Stop operation.
+     * @return FALSE if not available or an error occurred.
+     */
+    boolean stop();
+    
+  };
+  
+};
+
+#endif
