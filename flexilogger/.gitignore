@@ -1,0 +1,6 @@
+*.swp
+*.pyc
+BasicOperations_idl.py
+UI/
+UI__POA/
+*.log

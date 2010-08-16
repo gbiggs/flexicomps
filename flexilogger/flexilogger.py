@@ -24,7 +24,7 @@ import re
 import sys
 import time
 
-import BasicOperations
+import UI, UI__POA
 import OpenRTM_aist
 import RTC
 
@@ -90,15 +90,15 @@ def subtract_times(t1, t2):
     return result
 
 
-class BasicOperationsImpl(BasicOperations__POA.BasicOperations):
+class BasicOperationsImpl(UI__POA.BasicOperations):
     def __init__(self, start_cb, stop_cb):
         self._start_cb = start_cb
         self._stop_cb = stop_cb
 
-    def start():
+    def start(self):
         self._start_cb()
 
-    def stop():
+    def stop(self):
         self._stop_cb()
 
 
@@ -113,8 +113,8 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
 
         self._control_impl = BasicOperationsImpl(self._start, self._stop)
         self._control_port = OpenRTM_aist.CorbaPort("Control")
-        self._control_port.registerProvider("control", "BasicOperations",
-                self._control_port)
+        self._control_port.registerProvider("BasicOperations", "UI.BasicOperations",
+                self._control_impl)
         self.addPort(self._control_port)
 
         # Each port list is a list of tuples containing
@@ -125,17 +125,21 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
         if ports_are_input:
             port_type = OpenRTM_aist.InPort
             reg_func = self.registerInPort
-            port_name = 'input'
+            default_port_name = 'input'
         else:
             port_type = OpenRTM_aist.OutPort
             reg_func = self.registerOutPort
-            port_name = 'output'
+            default_port_name = 'output'
 
         for new_port in ports:
+            if new_port[2] == '':
+                port_name = default_port_name + str(self._num_ports)
+            else:
+                port_name = new_port[2]
             new_port_data = new_port[1](RTC.Time(0, 0), [])
-            new_port_obj = port_type(port_name + str(self._num_ports),
-                    new_port_data, OpenRTM_aist.RingBuffer(8))
-            reg_func(port_name + str(self._num_ports), new_port_obj)
+            new_port_obj = port_type(port_name, new_port_data,
+                    OpenRTM_aist.RingBuffer(8))
+            reg_func(port_name, new_port_obj)
             self._ports.append((new_port_data, new_port_obj))
             self._num_ports += 1
         return RTC.RTC_OK
@@ -164,11 +168,15 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
             print 'Failed to open log file: ' + str(e)
             return RTC.RTC_ERROR
         if ignore_control:
+            if verbosity >= 1:
+                print 'Logging enabled automatically.'
             self._logging = True
         return RTC.RTC_OK
 
     def onDeactivated(self, ec_id):
         if ignore_control:
+            if verbosity >= 1:
+                print 'Logging disabled automatically.'
             self._logging = True
         try:
             if self._log_file:
@@ -286,9 +294,13 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
 
     def _start(self):
         self._logging = True
+        if verbosity >= 1:
+            print 'Logging enabled manually.'
 
     def _stop(self):
         self._logging = False
+        if verbosity >= 1:
+            print 'Logging disabled manually.'
 
 
 flexilogger_spec = ['implementation_id', 'FlexiLogger',
@@ -324,8 +336,8 @@ def find_port_type(typeName):
 
 
 def get_port_options():
-    global absolute_times, ignore_times, log_file_name, playback_rate, \
-            ports_are_input, ports, text_mode, verbosity
+    global absolute_times, ignore_control, ignore_times, log_file_name, \
+            playback_rate, ports_are_input, ports, text_mode, verbosity
 
     try:
         usage = 'usage: %prog [options]\nSave data received on specified '\
@@ -336,7 +348,7 @@ def get_port_options():
                 action='store_true', default=False,
                 help='Times from the log file are sent as absolute, rather '\
                         'than adjusted for current time. [Default: %default]')
-        parse.add_option('-c', '--ignore_control', dest='ignore_control',
+        parser.add_option('-c', '--ignore_control', dest='ignore_control',
                 action='store_true', default=False,
                 help='Ignore the control port and perform logging/playback '\
                         'whenever the component is active. [Default: '\
@@ -353,6 +365,11 @@ def get_port_options():
         parser.add_option('-l', '--logfile', dest='log_file', type='string',
                 default='logger.log',
                 help='Log file to write to/read from. [Default: %default]')
+        parser.add_option('-n', '--port-names', dest='port_names',
+                type='string', default='',
+                help='Comma-separated list of port names. This list must be '\
+                        'the same length as the number of ports. If no list '\
+                        'is provided, the ports will be named automatically.')
         parser.add_option('-o', '--output', dest='input', action='store_false',
                 help='Ports are output ports, read data from log file and '\
                         'send. Opposite of --input.')
@@ -388,11 +405,17 @@ def get_port_options():
     text_mode = options.text_mode
     verbosity = options.verbosity
 
-    for port_str in options.ports:
+    port_names = options.port_names.split(',')
+
+    for ii, port_str in zip(range(len(options.ports)), options.ports):
         port_type = find_port_type(port_str)
         if port_type == None:
             parser.error('Invalid port: ' + port_str)
-        port_info = (port_str, port_type)
+        if ii < len(port_names):
+            name = port_names[ii]
+        else:
+            name = ''
+        port_info = (port_str, port_type, name)
         ports.append(port_info)
         if verbosity >= 2:
             print 'Added port: ' + str(port_info)
