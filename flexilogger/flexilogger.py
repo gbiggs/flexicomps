@@ -23,6 +23,7 @@ import optparse
 import re
 import sys
 import time
+import traceback
 
 import UI, UI__POA
 import OpenRTM_aist
@@ -136,7 +137,14 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
                 port_name = default_port_name + str(self._num_ports)
             else:
                 port_name = new_port[2]
-            new_port_data = new_port[1](RTC.Time(0, 0), [])
+            args, varargs, varkw, defaults = \
+                    inspect.getargspec(new_port[1].__init__)
+            if defaults:
+                init_args = tuple([None \
+                        for ii in range(len(args) - len(defaults) - 1)])
+            else:
+                init_args = [None for ii in range(len(args) - 1)]
+            new_port_data = new_port[1](*init_args)
             new_port_obj = port_type(port_name, new_port_data,
                     OpenRTM_aist.RingBuffer(8))
             reg_func(port_name, new_port_obj)
