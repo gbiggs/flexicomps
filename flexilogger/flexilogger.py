@@ -23,7 +23,6 @@ import optparse
 import re
 import sys
 import time
-import traceback
 
 import UI, UI__POA
 import OpenRTM_aist
@@ -150,7 +149,7 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
             new_port_obj = port_type(port_name, new_port_data,
                     OpenRTM_aist.RingBuffer(8))
             reg_func(port_name, new_port_obj)
-            self._ports.append((new_port_data, new_port_obj))
+            self._ports.append([new_port_data, new_port_obj])
             self._num_ports += 1
         return RTC.RTC_OK
 
@@ -199,17 +198,27 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
         return RTC.RTC_OK
 
     def onExecute(self, ec_id):
-        if self._logging:
-            if ports_are_input:
-                if not self._handle_input():
-                    return RTC.RTC_ERROR
-            else:
-                if not self._do_output():
-                    return RTC.RTC_ERROR
+        try:
+            if self._logging:
+                if ports_are_input:
+                    if not self._handle_input():
+                        return RTC.RTC_ERROR
+                else:
+                    if not self._do_output():
+                        return RTC.RTC_ERROR
+        except:
+            traceback.print_exc()
         return RTC.RTC_OK
 
 
-    def _write_log_item(self, port_num, port_type, data_time, data):
+    def _write_log_item(self, port_num, port_type, data):
+        if 'tm' in dir(data):
+            data_time = data.tm
+        else:
+            data_time = RTC.tm
+            now = time.time()
+            data_time.sec = int(now)
+            data_time.nsec = int(now % 1 * 1e9)
         if text_mode:
             try:
                 self._log_file.write('%s\t%s\t%d.%09d\t%s\n' % \
@@ -246,9 +255,11 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
         for ii in range(self._num_ports):
             if self._ports[ii][1].isNew():
                 data = self._ports[ii][1].read()
-                if verbosity >= 2:
-                    print 'Input port %d has new data: ' % ii + str(data.data)
-                if not self._write_log_item(ii, ports[ii][0], data.tm, data.data):
+                if verbosity >= 3:
+                    print 'Input port %d has new data: ' % ii + str(data)
+                elif verbosity == 2:
+                    print 'Input port %d has new data.'
+                if not self._write_log_item(ii, ports[ii][0], data):
                     return False
         return True
 
@@ -294,13 +305,13 @@ class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
     def _write_output_item(self, port_num, port_typeStr, data_time, data):
         if not absolute_times:
             data_time = add_times(data_time, self._time_offset)
-        self._ports[port_num][0].tm.sec = data_time.sec
-        self._ports[port_num][0].tm.nsec = data_time.nsec
-        self._ports[port_num][0].data = data
-        self._ports[port_num][1].write()
-        if verbosity >= 2:
+        self._ports[port_num][1].write(data)
+        if verbosity >= 3:
             print 'Wrote log entry with time %d.%09d to port %d: %s: ' % \
                     (data_time.sec, data_time.nsec, port_num, str(data))
+        elif verbosity == 2:
+            print 'Wrote log entry with time %d.%09d to port %d: ' % \
+                    (data_time.sec, data_time.nsec, port_num)
 
     def _start(self):
         self._logging = True
