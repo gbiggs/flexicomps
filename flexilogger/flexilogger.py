@@ -98,9 +98,11 @@ class BasicOperationsImpl(UI__POA.BasicOperations):
 
     def start(self):
         self._start_cb()
+        return True
 
     def stop(self):
         self._stop_cb()
+        return True
 
 
 class FlexiLogger(OpenRTM_aist.DataFlowComponentBase):
