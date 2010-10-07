@@ -26,7 +26,7 @@ import inspect, re, sys
 from traceback import print_exception
 from optparse import OptionParser, OptionError
 
-import OpenRTM, RTC
+import OpenRTM_aist, RTC
 
 from typemap import typeMap, multMap
 
@@ -135,9 +135,9 @@ flexifilter_spec = ['implementation_id',	'FlexiFilter',
 		 '']
 
 
-class FlexiFilter (OpenRTM.DataFlowComponentBase):
+class FlexiFilter (OpenRTM_aist.DataFlowComponentBase):
 	def __init__ (self, manager):
-		OpenRTM.DataFlowComponentBase.__init__ (self, manager)
+		OpenRTM_aist.DataFlowComponentBase.__init__ (self, manager)
 		self.__inputPorts = inputPorts
 		self.__outputPorts = outputPorts
 
@@ -150,14 +150,14 @@ class FlexiFilter (OpenRTM.DataFlowComponentBase):
 
 			for newPort in self.__inputPorts:
 				newPortData = newPort.type (RTC.Time (0, 0), [])
-				newPortPort = OpenRTM.InPort ('input%d' % newPort.index, newPortData, OpenRTM.RingBuffer (8))
+				newPortPort = OpenRTM_aist.InPort ('input%d' % newPort.index, newPortData, OpenRTM_aist.RingBuffer (8))
 				self.registerInPort ('input%d' % newPort.index, newPortPort)
 				newPort.data = newPortData
 				newPort.portObj = newPortPort
 
 			for newPort in self.__outputPorts:
 				newPortData = newPort.type (RTC.Time (0, 0), [newPort.emptyVal for ii in range (newPort.length)])
-				newPortPort = OpenRTM.OutPort ('output%d' % newPort.index, newPortData, OpenRTM.RingBuffer (8))
+				newPortPort = OpenRTM_aist.OutPort ('output%d' % newPort.index, newPortData, OpenRTM_aist.RingBuffer (8))
 				self.registerOutPort ('output%d' % newPort.index, newPortPort)
 				newPort.data = newPortData
 				newPort.portObj = newPortPort
@@ -243,8 +243,8 @@ class FlexiFilter (OpenRTM.DataFlowComponentBase):
 
 
 def FlexiFilterInit (manager):
-	profile = OpenRTM.Properties (defaults_str = flexifilter_spec)
-	manager.registerFactory (profile, FlexiFilter, OpenRTM.Delete)
+	profile = OpenRTM_aist.Properties (defaults_str = flexifilter_spec)
+	manager.registerFactory (profile, FlexiFilter, OpenRTM_aist.Delete)
 	comp = manager.createComponent ("FlexiFilter")
 
 
@@ -482,7 +482,7 @@ def main ():
 	if not GetPortOptions ():
 		return 1
 
-	mgr = OpenRTM.Manager.init (len (sys.argv), sys.argv)
+	mgr = OpenRTM_aist.Manager.init (len (sys.argv), sys.argv)
 
 	mgr.setModuleInitProc (FlexiFilterInit)
 	mgr.activateManager ()
