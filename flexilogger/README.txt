@@ -16,7 +16,7 @@ achieve faster or slower playback, if desired.
 Requirements
 ------------
 
-The component require OpenRTM-python-1.0.0 or greater.
+The component requires OpenRTM-python-1.0.0 or greater.
 
 This component uses the new string formatting operations that were introduced
 in Python 2.6. It will not function with an earlier version of Python. It has
