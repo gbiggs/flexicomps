@@ -19,9 +19,6 @@ FlexiAdd component.
 
 '''
 
-__version__ = '$Revision: $'
-# $Source$
-
 import inspect
 from optparse import OptionParser, OptionError
 import pickle
