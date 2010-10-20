@@ -13,139 +13,174 @@ Copyright (C) 2008-2010
 Licensed under the Eclipse Public License -v 1.0 (EPL)
 http://www.opensource.org/licenses/eclipse-1.0.txt
 
-File: flexidump.py
-
 FlexiDump component.
 
 '''
 
-__version__ = '$Revision: $'
-# $Source$
 
-import inspect, pickle, re, sys
-from traceback import print_exception
-from optparse import OptionParser, OptionError
+import imp
+import inspect
+import optparse
+import sys
+import traceback
 
-import OpenRTM_aist, RTC
+import OpenRTM_aist
+import RTC
 
-# Globals set by command line options
-ports = []
-verbosity = 0
-
-flexidump_spec = ['implementation_id',        'FlexiDump',
-                'type_name',                'FlexiDump',
-                'description',                'Flexible data dumping component',
-                'version',                    '0.0.1',
-                'vendor',                    'Geoffrey Biggs, AIST',
-                'category',                    'DataConsumer',
-                'activity_type',            'DataFlowComponent',
-                'max_instance',                '999',
-                'language',                    'Python',
-                'lang_type',                'SCRIPT',
-                '']
 
 class FlexiDump (OpenRTM_aist.DataFlowComponentBase):
-    def __init__ (self, manager):
-        OpenRTM_aist.DataFlowComponentBase.__init__ (self, manager)
+    def __init__ (self, mgr, port_spec, verb=0):
+        OpenRTM_aist.DataFlowComponentBase.__init__ (self, mgr)
+        self._port_spec = port_spec
+        self._verb = verb
 
-
-    def onStartup (self, ec_id):
+    def onInitialize (self):
         try:
-            # Each port list is a list of tuples containing (data object, port object)
-            self.__numPorts = 0
-            self.__ports = []
+            self._num_ports = 0
+            self._ports = []
 
-            for newPort in ports:
-                newPortData = newPort[1] (RTC.Time (0, 0), [])
-                newPortPort = OpenRTM_aist.InPort ('input%d' % self.__numPorts, newPortData, OpenRTM_aist.RingBuffer (8))
-                self.registerInPort ('input%d' % self.__numPorts, newPortPort)
-                self.__ports.append ((newPortData, newPortPort))
-                self.__numPorts += 1
+            for new_port in self._port_spec:
+                if self._verb >= 3:
+                    print >>sys.stderr, 'Adding port {0}'.format(new_port)
+                if new_port[2] == '':
+                    port_name = 'input' + str(self._num_ports)
+                else:
+                    port_name = new_port[2]
+                args, varargs, varkw, defaults = \
+                        inspect.getargspec(new_port[1].__init__)
+                if defaults:
+                    init_args = tuple([None \
+                            for ii in range(len(args) - len(defaults) - 1)])
+                else:
+                    init_args = [None for ii in range(len(args) - 1)]
+                new_port_data = new_port[1](*init_args)
+                new_port_obj = OpenRTM_aist.InPort(port_name, new_port_data,
+                        OpenRTM_aist.RingBuffer(8))
+                self.registerInPort(port_name, new_port_obj)
+                self._ports.append([new_port_data, new_port_obj])
+                self._num_ports += 1
+                if self._verb >= 2:
+                    print >>sys.stderr, 'Added port {0}'.format(new_port)
         except:
-            print_exception (*sys.exc_info ())
+            traceback.print_exc()
             return RTC.RTC_ERROR
         return RTC.RTC_OK
 
-
-    def onExecute (self, ec_id):
+    def onExecute(self, ec_id):
         try:
-            for ii in range (self.__numPorts):
-                if self.__ports[ii][1].isNew ():
-                    data = self.__ports[ii][1].read ()
-                    if verbosity == 1:
-                        print 'Input port %d (%s) has new data' % (ii, ports[ii][0])
-                    elif verbosity >= 2:
-                        print 'Input port %d (%s) has new data: %d.%09d\t%s' % (ii, ports[ii][0], data.tm.sec, data.tm.nsec, str (data.data))
+            for p in self._ports:
+                if p[1].isNew():
+                    data = p[1].read()
+                    if self._verb == -1:
+                        print 'Input port {0} has new data'.format(p[0])
+                    else:
+                        print 'Input port {0} has new data: {1}'.format(p[0],
+                                data)
         except:
-            print_exception (*sys.exc_info ())
+            traceback.print_exc()
         return RTC.RTC_OK
 
 
-def MyModuleInit (manager):
-    profile = OpenRTM_aist.Properties (defaults_str = flexidump_spec)
-    manager.registerFactory (profile, FlexiDump, OpenRTM_aist.Delete)
-    comp = manager.createComponent ("FlexiDump")
-
-
-def FindPortType (typeName):
-    types = [member for member in inspect.getmembers (RTC, inspect.isclass) if member[0] == typeName]
-    if len (types) == 0:
-        print 'Type "' + typeName + '" not found in module RTC'
+def find_port_type(type_name):
+    types = [member for member in inspect.getmembers(RTC, inspect.isclass) \
+            if member[0] == type_name]
+    if len(types) == 0:
+        print >>sys.stderr, \
+                'Type "{0}" not found in module RTC'.format(type_name)
         return None
-    elif len (types) != 1:
-        print 'Type name "' + typeName + '" is ambiguous: ' + str ([member[0] for member in types])
+    elif len(types) != 1:
+        print >>sys.stderr, 'Type name "{0}" is ambiguous: {1}'.format(
+                type_name, str([member[0] for member in types]))
         return None
     return types[0][1]
 
 
-def GetPortOptions ():
-    global ports, verbosity
-
+def get_options():
     try:
-        usage = 'usage: %prog [options]\nDump data streams to stdout with varying levels of verbosity.'
-        parser = OptionParser (usage = usage)
-        parser.add_option ('-p', '--port', dest = 'ports', type = 'string', action = 'append', default = [],
-                            help = 'Port type specification. Multiple ports can be specified with multiple '\
-                            'occurrences of this option.')
-        parser.add_option ('-v', '--verbosity', dest = 'verbosity', type = 'int', default = 0,
-                            help = 'Verbosity level (higher numbers give more output). [Default: %default]')
-        parser.add_option ('-f', dest = 'configfile', type = 'string', default = '',
-                            help = 'OpenRTM option; ignored by the component.')
-        options, args = parser.parse_args ()
-    except OptionError, e:
-        print 'OptionError: ' + str (e)
-        return False
+        usage = 'Usage: %prog [options]\nDump data streams to standard out.'
+        parser = optparse.OptionParser(usage=usage)
+        parser.add_option('-n', '--port-names', dest='port_names',
+                type='string', default='',
+                help='Comma-separated list of port names. This list must be \
+the same length as the number of ports. If no list is provided, the ports \
+will be named automatically.')
+        parser.add_option('-p', '--port', dest='ports', type='string',
+                action='append', default=[],
+                help='Port type. Multiple ports can be specified with \
+multiple occurances of this option.')
+        parser.add_option('-v', '--verbosity', dest='verbosity', type='int',
+                default=0, help='Verbosity level (higher numbers give more \
+output). [Default: %default]')
+        options, args = parser.parse_args()
+    except optparse.OptionError, e:
+        print 'OptionError: ' + str(e)
+        return None
 
-    if len (options.ports) == 0:
-        parser.error ('Must specify at least one port')
+    if not options.ports:
+        parser.error('Must specify at least one port')
+    port_names = options.port_names.split(',')
 
-    verbosity = options.verbosity
+    ports = []
+    for ii, port_str in zip(range(len(options.ports)), options.ports):
+        port_type = find_port_type(port_str)
+        if port_type == None:
+            parser.error('Invalid port: ' + port_str)
+        if ii < len(port_names):
+            name = port_names[ii]
+        else:
+            name = ''
+        port_info = (port_str, port_type, name)
+        ports.append(port_info)
+    options.ports = ports
 
-    for portStr in options.ports:
-        portType = FindPortType (portStr)
-        if portType == None:
-            return False
-        portInfo = (portStr, portType)
-        ports.append (portInfo)
-        if verbosity >= 2:
-            print 'Added port: ' + str (portInfo)
+    if options.verbosity:
+        print 'Reading data from {0} ports'.format(len(ports))
 
-    # Strip the options we use from sys.argv to avoid confusing the manager's option parser
-    sys.argv = [option for option in sys.argv if option not in parser._short_opt.keys () + parser._long_opt.keys () + options.ports or option == '-f']
-    return True
+    # Strip the options we use from sys.argv to avoid confusing the manager's
+    # option parser
+    sys.argv = [option for option in sys.argv \
+            if option not in parser._short_opt.keys() + \
+            parser._long_opt.keys() + options.ports or \
+            option == '-f']
+    return options
 
 
-def main ():
-    # Check options for ports
-    if not GetPortOptions ():
+def comp_fact(opts):
+    def fact_fun(mgr):
+        return FlexiDump(mgr, opts.ports, opts.verbosity)
+    return fact_fun
+
+
+def init(opts):
+    def init_fun(mgr):
+        spec = ['implementation_id',    'FlexiDump',
+            'type_name',                'FlexiDump',
+            'description',              'Flexible dumping component',
+            'version',                  '3.0',
+            'vendor',                   'Geoffrey Biggs, AIST',
+            'category',                 'DataConsumer',
+            'activity_type',            'DataFlowComponent',
+            'max_instance',             '999',
+            'language',                 'Python',
+            'lang_type',                'SCRIPT',
+            '']
+        profile = OpenRTM_aist.Properties(defaults_str=spec)
+        mgr.registerFactory(profile, comp_fact(opts), OpenRTM_aist.Delete)
+        comp = mgr.createComponent("FlexiDump")
+    return init_fun
+
+
+def main():
+    opts = get_options()
+    if not opts:
         return 1
+    mgr = OpenRTM_aist.Manager.init(len(sys.argv), sys.argv)
+    mgr.setModuleInitProc(init(opts))
+    mgr.activateManager()
+    mgr.runManager()
+    return 0
 
-    mgr = OpenRTM_aist.Manager.init (len (sys.argv), sys.argv)
-
-    mgr.setModuleInitProc (MyModuleInit)
-    mgr.activateManager ()
-    mgr.runManager ()
 
 if __name__ == "__main__":
-    main ()
+    main()
 
