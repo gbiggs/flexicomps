@@ -1,4 +1,4 @@
-)#!/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 '''flexicomps
@@ -28,6 +28,7 @@ from traceback import print_exc
 import UI, UI__POA
 import OpenRTM_aist
 import RTC
+
 
 def time_to_float(timeVal):
     return timeVal.sec + timeVal.nsec / 1e9
@@ -499,6 +500,7 @@ def main():
     mgr.setModuleInitProc(init(opts))
     mgr.activateManager()
     mgr.runManager()
+    return 0
 
 
 if __name__ == "__main__":
